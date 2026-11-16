@@ -51,6 +51,8 @@ O seed cria os pacotes `atendimento-geral-v1`, `pre-vendas-asaas-v1`, `suporte-v
 | `POST /api/hooks/manytalks` | Webhook ManyTalks |
 | `POST /api/hooks/asaas/[grokbotId]` | Webhook Asaas |
 
-Scripts: `dev`, `db:generate`, `db:migrate`, `db:seed`, `worker`, `typecheck`.
+Scripts: `dev`, `build`, `start`, `db:migrate`, `db:seed`, `db:backup`, `worker`, `typecheck`.
+
+Produção (VPS): ver [DEPLOY.md](./DEPLOY.md).
 
 O SQLite fica em `data/grokbott.sqlite` (gitignored).

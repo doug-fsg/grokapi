@@ -5,6 +5,7 @@ import { jwtVerify } from "jose";
 const PUBLIC = [
   "/login",
   "/api/auth/login",
+  "/api/health",
   "/api/hooks",
   "/api/library",
   "/api/d",
@@ -33,7 +34,14 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL("/login", req.url));
     }
     try {
-      await jwtVerify(token, new TextEncoder().encode(process.env.SESSION_SECRET ?? "dev-session-secret-change-me"));
+      const secret = (process.env.SESSION_SECRET ?? "").trim();
+      if (!secret && process.env.NODE_ENV === "production") {
+        return NextResponse.json({ error: "Servidor mal configurado." }, { status: 500 });
+      }
+      await jwtVerify(
+        token,
+        new TextEncoder().encode(secret || "dev-session-secret-change-me"),
+      );
     } catch {
       return NextResponse.redirect(new URL("/login", req.url));
     }

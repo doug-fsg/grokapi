@@ -28,6 +28,7 @@ data/*.db
 *.sqlite-wal
 *.sqlite-shm
 !data/.gitkeep
+data/backups/
 
 # playbook / OpenCode prompts com texto de conversas
 .tmp/

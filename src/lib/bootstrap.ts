@@ -11,6 +11,9 @@ export async function ensureAdminOperator() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) return;
+  if (process.env.NODE_ENV === "production" && (password.length < 12 || password === "admin1234")) {
+    throw new Error("ADMIN_PASSWORD de produção inválido (12+ chars, não use o default).");
+  }
   await db.insert(operators).values({
     id: crypto.randomUUID(),
     email,

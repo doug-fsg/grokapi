@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { sessionSecret } from "@/lib/env";
+import { cookieSecure, sessionSecret } from "@/lib/env";
 
 const ADMIN_COOKIE = "grokbott_admin";
 const DASH_COOKIE = "grokbott_dash";
@@ -50,20 +50,25 @@ export async function readDashboardSession(slug: string) {
   }
 }
 
+function cookieBase() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    path: "/",
+    secure: cookieSecure(),
+  };
+}
+
 export async function setAdminCookie(jwt: string) {
   (await cookies()).set(ADMIN_COOKIE, jwt, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
+    ...cookieBase(),
     maxAge: 60 * 60 * 24 * 7,
   });
 }
 
 export async function setDashboardCookie(jwt: string) {
   (await cookies()).set(DASH_COOKIE, jwt, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
+    ...cookieBase(),
     maxAge: 60 * 60 * 24 * 14,
   });
 }
