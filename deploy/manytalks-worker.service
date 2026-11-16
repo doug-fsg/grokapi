@@ -1,0 +1,23 @@
+[Unit]
+Description=ManyTalks Bot (jobs worker)
+After=network-online.target manytalks-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=manytalks
+Group=manytalks
+WorkingDirectory=/opt/grokapi
+Environment=NODE_ENV=production
+EnvironmentFile=-/opt/grokapi/.env
+ExecStart=/usr/bin/node node_modules/tsx/dist/cli.mjs scripts/worker.ts
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

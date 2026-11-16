@@ -1,0 +1,24 @@
+[Unit]
+Description=ManyTalks Bot (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=manytalks
+Group=manytalks
+WorkingDirectory=/opt/grokapi
+Environment=NODE_ENV=production
+EnvironmentFile=-/opt/grokapi/.env
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start --hostname 0.0.0.0 --port 3000
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Hardening leve
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
