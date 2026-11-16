@@ -1,0 +1,45 @@
+# dependencies / build
+node_modules
+.next
+out
+dist
+.turbo
+*.tsbuildinfo
+
+# logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# secrets & local env (NUNCA commitar)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+secrets*.json
+
+# banco local (conversas, tokens cifrados, dashboards)
+data/*.sqlite
+data/*.sqlite-*
+data/*.db
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+!data/.gitkeep
+
+# playbook / OpenCode prompts com texto de conversas
+.tmp/
+.tmp/**
+
+# IDE / agentes locais (skills/assets do Cursor — não são o produto)
+.agents/
+.cursor/
+.copilotkit/
+.vscode/settings.json
+.idea/
+
+# misc
+coverage/
+*.local

@@ -1,0 +1,43 @@
+:root,
+[data-grokbott-theme="dark"] {
+  --grokbott-canvas: #0a0a0a;
+  --grokbott-surface-1: #16181c;
+  --grokbott-surface-2: #1e2126;
+  --grokbott-surface-3: #272a2e;
+  --grokbott-hairline: #2f3336;
+  --grokbott-text-primary: #e7e9ea;
+  --grokbott-text-secondary: #71767b;
+  --grokbott-text-tertiary: #4d5156;
+  /* Marca: sunset é a voz; dusk só detalhe raro (nunca no logo). */
+  --grokbott-accent-sunset: #ff7a17;
+  --grokbott-accent-sunset-soft: #ff9a4a;
+  --grokbott-accent-dusk: #5b6578;
+  --grokbott-brand: var(--grokbott-accent-sunset);
+  --grokbott-primary-invert-bg: #ffffff;
+  --grokbott-primary-invert-fg: #0a0a0a;
+  --grokbott-link: #1d9bf0;
+  --grokbott-success: #00ba7c;
+  --grokbott-warning: #ffd400;
+  --grokbott-danger: #f4212e;
+
+  --background: var(--grokbott-canvas);
+  --foreground: var(--grokbott-text-primary);
+  --card: var(--grokbott-surface-2);
+  --card-foreground: var(--grokbott-text-primary);
+  --popover: var(--grokbott-surface-2);
+  --popover-foreground: var(--grokbott-text-primary);
+  --primary: var(--grokbott-primary-invert-bg);
+  --primary-foreground: var(--grokbott-primary-invert-fg);
+  --secondary: var(--grokbott-surface-3);
+  --secondary-foreground: var(--grokbott-text-primary);
+  --muted: var(--grokbott-surface-1);
+  --muted-foreground: var(--grokbott-text-secondary);
+  --accent: var(--grokbott-surface-3);
+  --accent-foreground: var(--grokbott-text-primary);
+  --destructive: var(--grokbott-danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--grokbott-hairline);
+  --input: var(--grokbott-hairline);
+  --ring: var(--grokbott-accent-sunset);
+  --radius: 0.75rem;
+}

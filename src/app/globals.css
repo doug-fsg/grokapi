@@ -1,0 +1,104 @@
+@import "../../packages/brand/src/tokens.css";
+@import "../../packages/brand/src/tokens-light.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: var(--grokbott-canvas);
+  color: var(--grokbott-text-primary);
+}
+
+.hero-brand {
+  background:
+    radial-gradient(ellipse 70% 45% at 50% -10%, rgba(255, 122, 23, 0.18), transparent 62%),
+    radial-gradient(ellipse 40% 30% at 85% 20%, rgba(255, 122, 23, 0.06), transparent 55%),
+    var(--grokbott-canvas);
+}
+
+.dash-shell {
+  background:
+    radial-gradient(ellipse 90% 55% at 10% -10%, rgba(255, 122, 23, 0.14), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 95% 0%, rgba(255, 122, 23, 0.06), transparent 50%),
+    var(--grokbott-canvas);
+}
+
+.dash-hero-card {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--grokbott-accent-sunset) 12%, var(--grokbott-surface-2)),
+      var(--grokbott-surface-2) 55%
+    );
+}
+
+[data-grokbott-theme="light"] .dash-shell {
+  background:
+    radial-gradient(ellipse 90% 55% at 10% -10%, rgba(255, 122, 23, 0.1), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 95% 0%, rgba(255, 122, 23, 0.05), transparent 50%),
+    var(--grokbott-canvas);
+}
+
+.gb-press {
+  transition:
+    transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.gb-lift {
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.field {
+  display: flex;
+  height: 2.5rem;
+  width: 100%;
+  align-items: center;
+  border-radius: 0.375rem;
+  border: 1px solid var(--grokbott-hairline);
+  background: var(--grokbott-surface-1);
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--grokbott-text-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gb-press:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .gb-press:active:not(:disabled) {
+    transform: translateY(1px) scale(0.985);
+    transition-duration: 90ms;
+  }
+
+  .gb-lift:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--grokbott-text-secondary) 55%, var(--grokbott-hairline));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gb-press,
+  .gb-lift {
+    transition: none;
+    transform: none;
+  }
+}
+
+*:focus-visible {
+  outline: 2px solid var(--grokbott-accent-sunset);
+  outline-offset: 2px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
