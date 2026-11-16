@@ -1,6 +1,7 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { ensureDataDir, databaseUrl } from "@/lib/env";
+import { databaseUrl } from "@/lib/env";
+import { ensureDataDir } from "@/lib/env-fs";
 import * as schema from "./schema";
 
 let cached: ReturnType<typeof drizzle<typeof schema>> | null = null;

@@ -1,17 +1,5 @@
-import { mkdirSync } from "node:fs";
-import path from "node:path";
-
 export function databaseUrl() {
   return process.env.DATABASE_URL ?? "file:./data/grokbott.sqlite";
-}
-
-export function ensureDataDir() {
-  const url = databaseUrl();
-  const match = url.match(/^file:(.+)$/);
-  if (!match) return;
-  const filePath = match[1];
-  const dir = path.dirname(path.resolve(filePath));
-  mkdirSync(dir, { recursive: true });
 }
 
 export function manytalksBase() {

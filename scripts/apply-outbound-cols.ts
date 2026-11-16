@@ -1,6 +1,7 @@
 import { createClient } from "@libsql/client";
 import { loadEnvFile } from "../src/lib/load-env";
-import { databaseUrl, ensureDataDir } from "../src/lib/env";
+import { databaseUrl } from "../src/lib/env";
+import { ensureDataDir } from "../src/lib/env-fs";
 
 async function main() {
   loadEnvFile();

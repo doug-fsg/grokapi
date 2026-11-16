@@ -2,7 +2,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { createClient } from "@libsql/client";
 import { loadEnvFile } from "../src/lib/load-env";
-import { ensureDataDir, databaseUrl } from "../src/lib/env";
+import { databaseUrl } from "../src/lib/env";
+import { ensureDataDir } from "../src/lib/env-fs";
 
 async function main() {
   loadEnvFile();
