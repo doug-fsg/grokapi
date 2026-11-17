@@ -24,7 +24,8 @@ type Props = {
   dashboardSlug: string | null;
   busy: boolean;
   onSave: () => void;
-  onToggle: () => void;
+  onPause: () => void;
+  onActivate: () => void;
   onDelete: () => void;
   onMsg: (msg: string) => void;
   onError: (msg: string) => void;
@@ -41,7 +42,8 @@ export function GrokbotToolbar({
   dashboardSlug,
   busy,
   onSave,
-  onToggle,
+  onPause,
+  onActivate,
   onDelete,
   onMsg,
   onError,
@@ -184,16 +186,29 @@ export function GrokbotToolbar({
         <Button type="button" size="sm" className="h-7 px-2.5 text-xs" disabled={busy} onClick={onSave}>
           {busy ? "Salvando…" : "Salvar"}
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 px-2.5 text-xs"
-          disabled={busy}
-          onClick={onToggle}
-        >
-          {enabled ? "Pausar" : "Ativar"}
-        </Button>
+        {enabled ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2.5 text-xs"
+            disabled={busy}
+            onClick={onPause}
+          >
+            Pausar
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="success"
+            className="h-7 px-2.5 text-xs"
+            disabled={busy}
+            onClick={onActivate}
+          >
+            Ativar
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"

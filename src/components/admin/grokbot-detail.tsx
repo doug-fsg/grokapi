@@ -77,6 +77,7 @@ export function GrokbotDetail({ id }: { id: string }) {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmActivate, setConfirmActivate] = useState(false);
   const [kanbanOpen, setKanbanOpen] = useState(false);
 
   const load = async () => {
@@ -284,7 +285,8 @@ export function GrokbotDetail({ id }: { id: string }) {
         dashboardSlug={data.dashboard?.slug ?? null}
         busy={busy}
         onSave={() => void save()}
-        onToggle={() => void togglePause(b.enabled)}
+        onPause={() => void togglePause(true)}
+        onActivate={() => setConfirmActivate(true)}
         onDelete={() => setConfirmDelete(true)}
         onMsg={setMsg}
         onError={setError}
@@ -302,6 +304,20 @@ export function GrokbotDetail({ id }: { id: string }) {
         danger
         busy={busy}
         onConfirm={removeBot}
+      />
+
+      <ConfirmModal
+        open={confirmActivate}
+        onOpenChange={setConfirmActivate}
+        title="Ativar ManyTalks Bot?"
+        description="O bot passa a atender: webhooks ManyTalks/Asaas e a API de manifest ficam ligados. Só ative se já publicou e conectou o Grok."
+        confirmLabel="Sim, ativar"
+        success
+        busy={busy}
+        onConfirm={async () => {
+          await togglePause(false);
+          setConfirmActivate(false);
+        }}
       />
 
       {!b.enabled && (

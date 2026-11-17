@@ -64,6 +64,10 @@ Corpo do POST /tools:
 \`\`\`json
 {"name":"send_reply","conversation_id":"<do envelope>","contact_id":null,"arguments":{"content":"..."}}
 \`\`\`
+Outbound (sem conversa no envelope): omita \`conversation_id\` ou use null:
+\`\`\`json
+{"name":"start_conversation","arguments":{"phone_number":"+5555999067484","name":"Douglas Gonçalves","first_message":"Olá, Douglas!"}}
+\`\`\`
 
 Tools ativas: ${tools.join(", ")}.
 Contatos: pode criar/editar (search_contacts, create_contact, update_contact). **Nunca** excluir contato.

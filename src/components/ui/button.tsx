@@ -13,6 +13,7 @@ const buttonVariants = cva(
         outline: "border border-border bg-transparent hover:bg-[var(--grokbott-surface-3)]",
         ghost: "hover:bg-[var(--grokbott-surface-3)]",
         danger: "bg-[var(--grokbott-danger)] text-white",
+        success: "bg-[var(--grokbott-success)] text-white hover:opacity-90",
       },
       size: {
         default: "h-10 px-4",

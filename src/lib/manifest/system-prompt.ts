@@ -41,6 +41,9 @@ function enabledToolNames(
     if (!tools.create_contact) names.push("search_contacts");
     names.push("update_contact");
   }
+  if (tools.start_conversation && !tools.create_contact && !tools.update_contact) {
+    names.push("search_contacts");
+  }
   if (tools.create_payment_link && asaas.allow_payment_link) names.push("create_payment_link");
   if (tools.create_pix_charge && asaas.allow_pix_copy) names.push("create_pix_charge");
   if (tools.start_conversation) names.push("start_conversation");
@@ -72,7 +75,7 @@ export function compileRuntimeSystemLibrary(input: RuntimeSystemInput, toolsUrl:
     "Você NÃO chama app.manytalks.com.br direto. NÃO peça MANYTALKS_API_TOKEN, ASAAS_API_KEY nem MANYTALKS_ROUTINE_KEY.",
     "Único auth seu: Authorization: Bearer grk_live_… (já no prompt colável).",
     `Ações: POST ${toolsUrl} com name ∈ {${tools}}.`,
-    'Corpo: {"name":"send_reply","conversation_id":"<display_id do envelope>","contact_id":<opcional>,"arguments":{...}}.',
+    'Corpo: {"name":"...","conversation_id":"<display_id>"?,"contact_id":<opcional>,"arguments":{...}} — conversation_id opcional em start_conversation, search_contacts, create_contact, lookup_knowledge.',
     "Políticas: GET manifest_url com o mesmo Bearer (após manifest_published).",
     input.labels.allowed_titles.length
       ? `Etiquetas permitidas: ${input.labels.allowed_titles.join(", ")}.`
@@ -204,10 +207,17 @@ export type RuntimeReadyPayload = {
     manifest_url: string;
     tools_url: string;
     tools_post: {
-      name: string;
-      conversation_id: string;
-      contact_id?: number;
-      arguments: Record<string, unknown>;
+      inbound: {
+        name: string;
+        conversation_id: string;
+        contact_id?: number;
+        arguments: Record<string, unknown>;
+      };
+      outbound: {
+        name: string;
+        arguments: Record<string, unknown>;
+      };
+      conversation_id_required_for: string;
     };
     forbidden_env_vars: string[];
     note: string;
@@ -327,10 +337,22 @@ export function buildLibraryRuntimeReadyPayload(
       manifest_url: manifestUrl,
       tools_url: toolsUrl,
       tools_post: {
-        name: "send_reply",
-        conversation_id: "<display_id do envelope>",
-        contact_id: 0,
-        arguments: { content: "texto" },
+        inbound: {
+          name: "send_reply",
+          conversation_id: "<display_id do envelope>",
+          contact_id: 0,
+          arguments: { content: "texto" },
+        },
+        outbound: {
+          name: "start_conversation",
+          arguments: {
+            phone_number: "+55…",
+            name: "Nome",
+            first_message: "Saudação",
+          },
+        },
+        conversation_id_required_for:
+          "send_reply, set_conversation_labels, move_kanban_card, assign_conversation",
       },
       forbidden_env_vars: [
         "MANYTALKS_API_TOKEN",

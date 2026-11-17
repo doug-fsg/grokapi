@@ -253,7 +253,7 @@ export function WizardForm() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            enabled: true,
+            enabled: false,
             checklistAck: {
               capitao_off_inboxes: true,
               manytalks_webhook_ok: false,
@@ -268,7 +268,7 @@ export function WizardForm() {
           /* checklist no detalhe cobre reconectar */
         }
         setPublished(true);
-        setMsg("ManyTalks Bot publicado e ativado.");
+        setMsg("ManyTalks Bot criado e publicado (pausado — ative no painel quando estiver pronto).");
         router.push(`/grokbots/${id}`);
         router.refresh();
         return;

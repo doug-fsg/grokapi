@@ -51,7 +51,7 @@ export function toolsFromPolicy(manifest: ManifestV1) {
       },
     });
   }
-  if (p.create_contact || p.update_contact) {
+  if (p.create_contact || p.update_contact || p.start_conversation) {
     tools.push({
       type: "function",
       function: {

@@ -106,7 +106,8 @@ export async function executeTool(
     return { stage_id: stage };
   }
   if (name === "search_contacts") {
-    if (!manifest.tools_policy.create_contact && !manifest.tools_policy.update_contact) {
+    const p = manifest.tools_policy;
+    if (!p.create_contact && !p.update_contact && !p.start_conversation) {
       throw new Error("Busca de contatos desabilitada.");
     }
     const q = String(args.q ?? "").trim();

@@ -17,6 +17,7 @@ type Props = {
   description: string;
   confirmLabel?: string;
   danger?: boolean;
+  success?: boolean;
   busy?: boolean;
   onConfirm: () => void | Promise<void>;
 };
@@ -28,6 +29,7 @@ export function ConfirmModal({
   description,
   confirmLabel = "Confirmar",
   danger,
+  success,
   busy,
   onConfirm,
 }: Props) {
@@ -51,7 +53,7 @@ export function ConfirmModal({
           <Button
             type="button"
             size="sm"
-            variant={danger ? "danger" : "default"}
+            variant={danger ? "danger" : success ? "success" : "default"}
             disabled={busy}
             onClick={() => void onConfirm()}
           >

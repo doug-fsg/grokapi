@@ -5,6 +5,7 @@ import { grokbots } from "@/lib/db/schema";
 import { resolveRuntimeToken } from "@/lib/library/runtime-auth";
 import { loadPublishedManifest } from "@/lib/manifest/load-published";
 import { ManytalksSendErrorException } from "@/lib/manytalks/send-errors";
+import { toolRequiresConversationId } from "@/lib/runtime/tool-context";
 import { executeTool } from "@/lib/runtime/tool-exec";
 
 export async function POST(req: Request) {
@@ -33,13 +34,19 @@ export async function POST(req: Request) {
   const name = String(body.name ?? "").trim();
   if (!name) return NextResponse.json({ error: "name obrigatório" }, { status: 400 });
   const conversationId = body.conversation_id;
-  if (conversationId == null || conversationId === "") {
-    return NextResponse.json({ error: "conversation_id obrigatório" }, { status: 400 });
+  if (toolRequiresConversationId(name)) {
+    if (conversationId == null || conversationId === "") {
+      return NextResponse.json({ error: "conversation_id obrigatório para esta tool" }, { status: 400 });
+    }
   }
+  const convCtx =
+    conversationId != null && conversationId !== ""
+      ? String(conversationId)
+      : "__no_conversation__";
   try {
     const result = await executeTool(
       manifest,
-      { conversationId, contactId: body.contact_id },
+      { conversationId: convCtx, contactId: body.contact_id },
       name,
       body.arguments ?? {},
     );
