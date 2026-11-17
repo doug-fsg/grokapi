@@ -81,6 +81,15 @@ export default async function SettingsPage() {
         </p>
       </Card>
       <Card className="space-y-2 text-sm">
+        <h2 className="font-display text-lg font-semibold">Escalar / réplicas</h2>
+        <p className="text-[var(--grokbott-text-secondary)]">
+          Passo a passo pós-deploy:{" "}
+          <a href="/settings/scaling" className="underline">
+            Como escalar
+          </a>
+        </p>
+      </Card>
+      <Card className="space-y-2 text-sm">
         <h2 className="font-display text-lg font-semibold">Publicar um cliente</h2>
         <ol className="list-decimal space-y-1 pl-5 text-[var(--grokbott-text-secondary)]">
           <li>SERVICE_TOKEN no .env — uma vez.</li>

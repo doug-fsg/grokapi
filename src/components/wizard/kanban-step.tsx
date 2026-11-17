@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StageBoard } from "@/components/wizard/stage-board";
+import { pipelineStagesFromAttributeValues } from "@/lib/manytalks/pipeline-stages";
 
 export type Pipeline = {
   id: number;
   attribute_display_name?: string;
-  attribute_values?: { stage_order?: string[] };
+  attribute_values?: unknown;
 };
 
 type Props = {
@@ -119,8 +120,8 @@ export function KanbanStep({
   function selectPipeline(p: Pipeline) {
     setPipelineId(p.id);
     setMode("existing");
-    const fromPipe = p.attribute_values?.stage_order?.filter(Boolean);
-    if (fromPipe?.length) setStages(fromPipe.map(String));
+    const fromPipe = pipelineStagesFromAttributeValues(p.attribute_values);
+    if (fromPipe.length) setStages(fromPipe);
   }
 
   function addStage() {
@@ -299,16 +300,19 @@ export function KanbanStep({
                   <p className="text-sm font-medium">
                     {selectedPipeline.attribute_display_name ?? `Funil #${selectedPipeline.id}`}
                   </p>
-                  {(selectedPipeline.attribute_values?.stage_order?.length ?? 0) > 0 && (
+                  {pipelineStagesFromAttributeValues(selectedPipeline.attribute_values).length >
+                    0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {selectedPipeline.attribute_values!.stage_order!.map((c) => (
+                      {pipelineStagesFromAttributeValues(selectedPipeline.attribute_values).map(
+                        (c) => (
                         <span
                           key={c}
                           className="rounded-md bg-[var(--grokbott-surface-1)] px-2 py-0.5 text-xs"
                         >
                           {c}
                         </span>
-                      ))}
+                        ),
+                      )}
                     </div>
                   )}
                 </div>

@@ -51,6 +51,98 @@ export function toolsFromPolicy(manifest: ManifestV1) {
       },
     });
   }
+  if (p.create_contact || p.update_contact) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "search_contacts",
+        description:
+          "Busca contatos por nome, email ou telefone (q). Use antes de criar duplicado. Nunca exclui.",
+        parameters: {
+          type: "object",
+          properties: { q: { type: "string", description: "Termo de busca" } },
+          required: ["q"],
+        },
+      },
+    });
+  }
+  if (p.create_contact) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "create_contact",
+        description:
+          "Cria contato no ManyTalks. inbox_id opcional (default: 1ª inbox do bot). Nunca exclua contatos.",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            email: { type: "string" },
+            phone_number: { type: "string" },
+            inbox_id: { type: "integer" },
+            identifier: { type: "string" },
+            custom_attributes: { type: "object" },
+          },
+        },
+      },
+    });
+  }
+  if (p.update_contact) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "update_contact",
+        description:
+          "Atualiza contato existente (PATCH). contact_id obrigatório se não vier do contexto. Proibido excluir.",
+        parameters: {
+          type: "object",
+          properties: {
+            contact_id: { type: "integer" },
+            name: { type: "string" },
+            email: { type: "string" },
+            phone_number: { type: "string" },
+            identifier: { type: "string" },
+            custom_attributes: { type: "object" },
+          },
+        },
+      },
+    });
+  }
+  if (p.start_conversation) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "start_conversation",
+        description:
+          "Servidor: acha ou cria contato, abre conversa na inbox, envia 1ª mensagem e atribui ao agente do bot. Use só para falar com alguém que ainda não tem conversa aberta — não duplique send_reply na mesma conversa.",
+        parameters: {
+          type: "object",
+          properties: {
+            contact_id: { type: "integer", description: "Se já souber o contato" },
+            phone_number: { type: "string", description: "E.164 ou com máscara" },
+            name: { type: "string", description: "Nome se precisar criar contato" },
+            inbox_id: { type: "integer", description: "Default: 1ª inbox do bot" },
+            first_message: { type: "string", description: "Primeira mensagem pública" },
+            assign: {
+              type: "boolean",
+              description: "Default true — usa assignee do manifest",
+            },
+          },
+        },
+      },
+    });
+  }
+  if (p.assign_conversation) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "assign_conversation",
+        description:
+          "Atribui a conversa atual ao agente configurado no painel (default_assignee_id). Sem argumentos.",
+        parameters: { type: "object", properties: {} },
+      },
+    });
+  }
   if (p.move_kanban_card) {
     tools.push({
       type: "function",

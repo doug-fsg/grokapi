@@ -8,8 +8,10 @@ import { Card } from "@/components/ui/card";
 import { GrokbotToolbar } from "@/components/admin/grokbot-toolbar";
 import { PromptEditor, type ToolsDraft } from "@/components/admin/prompt-editor";
 import type { RuntimeSystemInput } from "@/lib/manifest/system-prompt";
-import { emptyLabels } from "@/lib/defaults";
-import type { GrokbotLabels } from "@/lib/types/manifest";
+import { defaultConversationRules, emptyLabels } from "@/lib/defaults";
+import type { ConversationRules, GrokbotLabels } from "@/lib/types/manifest";
+import { ConversationRulesCard } from "@/components/admin/conversation-rules-card";
+import { normalizeConversationRules as normalizeConversationRulesFromDetail } from "@/lib/runtime/relay-assignee-filter";
 import { RuntimePanel } from "@/components/admin/runtime-panel";
 import { BotGoLiveChecklist } from "@/components/admin/bot-go-live-checklist";
 import { KanbanModal } from "@/components/admin/kanban-modal";
@@ -40,8 +42,12 @@ const EMPTY_TOOLS: ToolsDraft = {
   send_reply: true,
   set_conversation_labels: true,
   move_kanban_card: false,
+  create_contact: true,
+  update_contact: true,
   create_payment_link: false,
   create_pix_charge: false,
+  start_conversation: true,
+  assign_conversation: true,
 };
 
 export function GrokbotDetail({ id }: { id: string }) {
@@ -56,6 +62,8 @@ export function GrokbotDetail({ id }: { id: string }) {
   const [pauseStages, setPauseStages] = useState<string[]>([]);
   const [objetivoStageId, setObjetivoStageId] = useState<string | null>(null);
   const [labels, setLabels] = useState<GrokbotLabels>(emptyLabels());
+  const [conversationRules, setConversationRules] =
+    useState<ConversationRules>(defaultConversationRules);
   const [runtimeDraft, setRuntimeDraft] = useState<RuntimeSystemInput | null>(null);
   const [manytalksCtx, setManytalksCtx] = useState<{
     base_url: string;
@@ -81,6 +89,10 @@ export function GrokbotDetail({ id }: { id: string }) {
     setSelected((j.inboxes ?? []).map((i: InboxRow) => i.inboxId));
     const policy = parseJson<Partial<ToolsDraft>>(j.config?.toolsPolicyJson, {});
     setTools({ ...EMPTY_TOOLS, ...policy });
+    const conv = parseJson<Partial<ConversationRules>>(j.config?.conversationRulesJson, {});
+    setConversationRules(
+      normalizeConversationRulesFromDetail({ ...defaultConversationRules, ...conv }),
+    );
     const kanban = parseJson<{
       pipeline_id?: number | null;
       stages_allowed?: string[];
@@ -156,6 +168,10 @@ export function GrokbotDetail({ id }: { id: string }) {
               pause_bot_stages: [],
               objetivo_stage_id: null,
             },
+        conversationRules: (() => {
+          const { default_assignee_id: _drop, ...rest } = conversationRules;
+          return rest;
+        })(),
       }),
     }).then((r) => r.json().then((j) => ({ ok: r.ok, j })));
     if (!saved.ok) throw new Error(saved.j.error ?? "Falha ao salvar");
@@ -306,6 +322,8 @@ export function GrokbotDetail({ id }: { id: string }) {
         onMsg={setMsg}
         onError={setError}
       />
+
+      <ConversationRulesCard rules={conversationRules} onChange={setConversationRules} />
 
       {runtimeDraft && manytalksCtx && (
         <PromptEditor

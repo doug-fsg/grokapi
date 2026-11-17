@@ -47,11 +47,19 @@ O seed cria os pacotes `atendimento-geral-v1`, `pre-vendas-asaas-v1`, `suporte-v
 | `/library` | Pacotes JSON |
 | `/settings` | Aparência + chaves de servidor |
 | `/d/[slug]` | Dashboard cliente (senha obrigatória) |
-| `GET /api/library/v1/manifest` | ManifestV1 (`Authorization: Bearer grk_live_…`) |
+| `GET /api/library/v1/manifest` | ManifestV1 publicado (`Authorization: Bearer grk_live_…`) |
+| `POST /api/library/v1/tools` | Executa tool (runtime externo) |
+| `POST /api/library/v1/events` | Registra evento de domínio |
 | `POST /api/hooks/manytalks` | Webhook ManyTalks |
 | `POST /api/hooks/asaas/[grokbotId]` | Webhook Asaas |
 
-Scripts: `dev`, `build`, `start`, `db:migrate`, `db:seed`, `db:backup`, `worker`, `typecheck`.
+## Runtime (relay + biblioteca)
+
+- **Publicar** congela o manifest — webhooks e a Biblioteca usam só o snapshot publicado; o Grok recebe `manifest_published` no webhook de respostas.
+- **Mensagens:** ManyTalks → esta plataforma → webhook do Grok (`message_created`). O Grok usa `GET /manifest` e `POST /tools` para agir no ManyTalks/Asaas.
+- **Teste:** ao salvar URL/chave do relay no painel, roda varredura read-only ManyTalks e envia `integration_test` ao Grok. Não usamos `XAI_API_KEY` neste servidor.
+
+Scripts: `dev`, `build`, `start`, `db:migrate`, `db:seed`, `db:backup`, `worker`, `typecheck`, `test`, `test:probes` (probes ManyTalks locais, igual ao checklist; `--e2e` para roteiro completo).
 
 Produção (VPS): ver [DEPLOY.md](./DEPLOY.md).
 

@@ -6,7 +6,7 @@ import {
   grokbots,
   processedMessages,
 } from "@/lib/db/schema";
-import { compileManifest } from "@/lib/manifest/compile";
+import { loadPublishedManifest } from "@/lib/manifest/load-published";
 import { writeActionLog } from "@/lib/logs/write";
 import { extractInboxId, loadBotGate, shouldProcessInbox } from "@/lib/runtime/inbox-filter";
 import { digestMessageWebhook } from "@/lib/runtime/turn-context";
@@ -17,6 +17,11 @@ import {
 } from "@/lib/runtime/outbound-forward";
 import { nowIso } from "@/lib/utils";
 import type { ManifestV1 } from "@/lib/types/manifest";
+import { tryAutoAssignOnMessage } from "@/lib/runtime/auto-assign";
+import {
+  assigneeIdFromConversation,
+  decideRelayByAssignee,
+} from "@/lib/runtime/relay-assignee-filter";
 
 type Payload = Record<string, unknown>;
 
@@ -65,8 +70,10 @@ export async function handleManytalksWebhook(body: Payload) {
     return { skipped: true, reason: inboxOk };
   }
 
-  const manifest = await compileManifest(bot.id, { includeSecrets: true });
-  if (!manifest) return { skipped: true, reason: "sem manifest" };
+  const manifest = await loadPublishedManifest(bot.id);
+  if (!manifest) {
+    return { skipped: true, reason: "manifesto não publicado — Publicar no painel" };
+  }
 
   if (event === "contact_kanban_stage_changed") {
     return handleKanbanPause(manifest, body);
@@ -111,17 +118,6 @@ async function handleMessageCreated(
   if (!conversationId || !messageId) return { skipped: true, reason: "ids ausentes" };
 
   const db = getDb();
-  try {
-    await db.insert(processedMessages).values({
-      id: crypto.randomUUID(),
-      grokbotId: manifest.grokbot.id,
-      messageId,
-      conversationId,
-      processedAt: nowIso(),
-    });
-  } catch {
-    return { skipped: true, reason: "idempotente" };
-  }
 
   const [state] = await db
     .select()
@@ -136,9 +132,9 @@ async function handleMessageCreated(
   if (state?.botPaused) return { skipped: true, reason: "bot pausado" };
 
   const outbound = await getOutboundWebhook(manifest.grokbot.id);
-  if (!outbound) {
+  if (!outbound?.url || !outbound.authValue) {
     const msg =
-      "Webhook de saída não configurado. O runtime externo deve PUT /api/library/v1/outbound-webhook.";
+      "Webhook de respostas não configurado — URL e chave no painel (Ligar o bot).";
     await writeActionLog({
       grokbotId: manifest.grokbot.id,
       conversationId,
@@ -149,9 +145,32 @@ async function handleMessageCreated(
       .update(grokbots)
       .set({ lastError: msg, updatedAt: nowIso() })
       .where(eq(grokbots.id, manifest.grokbot.id));
-    return { skipped: true, reason: "sem webhook de saída" };
+    return { skipped: true, reason: "sem webhook de respostas" };
   }
 
+  return relayMessageCreated(
+    manifest,
+    body,
+    digest,
+    message,
+    inboxId,
+    conversationId,
+    messageId,
+    outbound,
+  );
+}
+
+async function relayMessageCreated(
+  manifest: ManifestV1,
+  body: Payload,
+  digest: ReturnType<typeof digestMessageWebhook>,
+  message: Payload,
+  inboxId: number,
+  conversationId: string,
+  messageId: string,
+  outbound: NonNullable<Awaited<ReturnType<typeof getOutboundWebhook>>>,
+) {
+  const db = getDb();
   const conversation = (body.conversation ?? nested(message, "conversation") ?? {}) as Payload;
   const sender = (nested(message, "sender") ??
     nested(body, "sender") ??
@@ -165,6 +184,37 @@ async function handleMessageCreated(
   if (!manifest.conversation_rules.statuses.includes(status)) {
     return { skipped: true, reason: `status ${status}` };
   }
+
+  const assign = await tryAutoAssignOnMessage(manifest, conversationId, conversation);
+  const assigneeAfter =
+    assign.assignee_id ?? assigneeIdFromConversation(conversation);
+  const relayDecision = decideRelayByAssignee(manifest.conversation_rules, assigneeAfter);
+  if (!relayDecision.relay) {
+    await writeActionLog({
+      grokbotId: manifest.grokbot.id,
+      conversationId,
+      kind: "skip:assignee_filter",
+      payload: {
+        reason: relayDecision.reason,
+        assignee_id: relayDecision.assignee_id,
+        bucket: relayDecision.bucket,
+      },
+    });
+    return { skipped: true, reason: relayDecision.reason };
+  }
+
+  try {
+    await db.insert(processedMessages).values({
+      id: crypto.randomUUID(),
+      grokbotId: manifest.grokbot.id,
+      messageId,
+      conversationId,
+      processedAt: nowIso(),
+    });
+  } catch {
+    return { skipped: true, reason: "idempotente" };
+  }
+
   const envelope: OutboundEnvelope = {
     schema_version: "1.0",
     event: "message_created",
@@ -179,17 +229,20 @@ async function handleMessageCreated(
       message_id: messageId,
       from: digest.from,
       content: digest.content || String(message.content ?? "").trim(),
+      assignee_id: assigneeAfter,
+      auto_assigned: assign.assigned,
+      relay_bucket: relayDecision.bucket,
     },
     labels: labelsFromBody,
     received_at: nowIso(),
   };
   const fwd = await forwardToOutboundWebhook({
-      grokbotId: manifest.grokbot.id,
-      url: outbound.url,
-      authHeader: outbound.authHeader,
-      authValue: outbound.authValue,
-      envelope,
-    });
+    grokbotId: manifest.grokbot.id,
+    url: outbound.url,
+    authHeader: outbound.authHeader,
+    authValue: outbound.authValue,
+    envelope,
+  });
   await db.insert(domainEvents).values({
     id: crypto.randomUUID(),
     grokbotId: manifest.grokbot.id,

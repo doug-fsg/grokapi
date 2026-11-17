@@ -2,8 +2,19 @@ export type ToolsPolicy = {
   send_reply: boolean;
   set_conversation_labels: boolean;
   move_kanban_card: boolean;
+  create_contact: boolean;
+  update_contact: boolean;
   create_payment_link: boolean;
   create_pix_charge: boolean;
+  /** Contato + conversa aberta + 1ª mensagem no servidor (economiza tokens). */
+  start_conversation: boolean;
+  /** Atribuir conversa ao agente padrão (assignee no manifest). */
+  assign_conversation: boolean;
+};
+
+export type ContactsPolicy = {
+  /** Sempre false no produto — exclusão não exposta ao runtime. */
+  allow_delete: false;
 };
 
 export type StageRuleManifest = {
@@ -35,6 +46,16 @@ export type ConversationRules = {
   only_when_unassigned: boolean;
   ignore_private: boolean;
   execute_tools_before_reply: boolean;
+  /** ID do agente ManyTalks que “é o bot” (atribuição). */
+  default_assignee_id: number | null;
+  /** Antes de repassar message_created ao Grok (sem gastar tool). */
+  auto_assign_on_message: boolean;
+  /** Envia message_created ao Grok quando conversa sem responsável. */
+  relay_when_unassigned: boolean;
+  /** Envia message_created quando responsável = default_assignee_id. */
+  relay_when_assigned_to_me: boolean;
+  /** In-process xAI nesta instância; default = true quando XAI_API_KEY existe. */
+  use_in_process_grok?: boolean;
 };
 
 export type ManifestV1 = {
@@ -60,6 +81,7 @@ export type ManifestV1 = {
     knowledge_entries: { title: string; body: string }[];
   };
   tools_policy: ToolsPolicy;
+  contacts_policy: ContactsPolicy;
   labels: GrokbotLabels;
   kanban: {
     pipeline_id: number | null;

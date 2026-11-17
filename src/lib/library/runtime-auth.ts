@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { grokbotsRuntimeTokens } from "@/lib/db/schema";
 import { hashToken } from "@/lib/crypto";
+import { runtimeTokenAllowed } from "@/lib/library/runtime-token-grace";
 
 export async function resolveRuntimeToken(req: Request) {
   const header = req.headers.get("authorization") ?? "";
@@ -15,5 +16,7 @@ export async function resolveRuntimeToken(req: Request) {
     .limit(1);
   if (!row) return null;
   if (row.expiresAt && new Date(row.expiresAt) < new Date()) return null;
+  const ok = await runtimeTokenAllowed(row.grokbotId, row.id, row.createdAt);
+  if (!ok) return null;
   return row;
 }

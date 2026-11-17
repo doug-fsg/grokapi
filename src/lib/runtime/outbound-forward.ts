@@ -18,6 +18,9 @@ export type OutboundEnvelope = {
     message_id: string;
     from: "client" | "agent";
     content: string;
+    assignee_id?: number | null;
+    auto_assigned?: boolean;
+    relay_bucket?: "unassigned" | "assigned_to_me" | "assigned_other";
   };
   labels: string[];
   received_at: string;

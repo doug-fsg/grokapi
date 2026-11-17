@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { domainEvents, grokbots, paymentEvents } from "@/lib/db/schema";
-import { compileManifest } from "@/lib/manifest/compile";
+import { loadPublishedManifest } from "@/lib/manifest/load-published";
 import { createManytalksClient } from "@/lib/manytalks/client";
 import { nowIso } from "@/lib/utils";
 
@@ -16,8 +16,8 @@ export async function handleAsaasWebhook(grokbotId: string, body: Payload) {
   if (!bot) throw new Error("ManyTalks Bot não encontrado.");
   if (!bot.enabled) return { skipped: true, reason: "pausado (webhooks/API off)" };
 
-  const manifest = await compileManifest(grokbotId, { includeSecrets: true });
-  if (!manifest) throw new Error("ManyTalks Bot sem manifest.");
+  const manifest = await loadPublishedManifest(grokbotId);
+  if (!manifest) return { skipped: true, reason: "manifesto não publicado" };
   const event = String(body.event ?? "");
   const payment = (body.payment ?? body) as Payload;
   const asaasEventId = String(body.id ?? `${event}-${payment.id ?? crypto.randomUUID()}`);

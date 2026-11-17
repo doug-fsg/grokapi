@@ -20,6 +20,7 @@ import type {
 } from "@/lib/types/manifest";
 import {
   defaultConversationRules,
+  defaultContactsPolicy,
   defaultToolsPolicy,
   emptyAsaas,
   emptyKanban,
@@ -32,6 +33,8 @@ import {
   compileRuntimeSystem,
   type RuntimeSystemInput,
 } from "@/lib/manifest/system-prompt";
+import { defaultManytalksAssigneeId } from "@/lib/manytalks/default-assignee";
+import { normalizeConversationRules } from "@/lib/runtime/relay-assignee-filter";
 
 export async function loadGrokbotBundle(grokbotId: string) {
   const db = getDb();
@@ -88,12 +91,20 @@ export async function compileManifest(
   const bundle = await loadGrokbotBundle(grokbotId);
   if (!bundle?.config) return null;
   const { bot, config, secrets, inboxes, rules, dash } = bundle;
-  const tools = jsonParse(config.toolsPolicyJson, defaultToolsPolicy);
+  const tools = { ...defaultToolsPolicy, ...jsonParse(config.toolsPolicyJson, {}) };
   const labels = jsonParse(config.labelsJson, emptyLabels());
   const kanbanCfg = jsonParse(config.kanbanJson, emptyKanban());
   const asaasCfg = jsonParse(config.asaasJson, emptyAsaas());
   const post = jsonParse(config.postPaymentJson, emptyPostPayment());
-  const conv = jsonParse(config.conversationRulesJson, defaultConversationRules);
+  const convRaw = {
+    ...defaultConversationRules,
+    ...jsonParse(config.conversationRulesJson, {} as Partial<typeof defaultConversationRules>),
+  };
+  const convNormalized = normalizeConversationRules(convRaw);
+  const conv = {
+    ...convNormalized,
+    default_assignee_id: defaultManytalksAssigneeId(),
+  };
   const checklist = jsonParse(config.checklistAckJson, {
     capitao_off_inboxes: true,
     manytalks_webhook_ok: false,
@@ -158,6 +169,7 @@ export async function compileManifest(
       knowledge_entries: parseKnowledge(config.knowledge),
     },
     tools_policy: tools,
+    contacts_policy: defaultContactsPolicy,
     labels,
     kanban: {
       pipeline_id: kanbanCfg.pipeline_id ?? null,

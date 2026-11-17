@@ -13,6 +13,7 @@ import { adminGuard, fail } from "@/lib/admin/http";
 import { deleteManytalksWebhook } from "@/lib/admin/register-manytalks-webhook";
 import { mergeChecklistAck, type ChecklistAck } from "@/lib/admin/checklist-ack";
 import { normalizeOutboundAuth } from "@/lib/runtime/outbound-forward";
+import { runRelayIntegrationTest } from "@/lib/runtime/outbound-notify";
 import { nowIso } from "@/lib/utils";
 
 export async function GET(
@@ -50,6 +51,7 @@ export async function GET(
       createdAt: t.createdAt,
     })),
     dashboard: dash ? { slug: dash.slug } : null,
+    capabilities: { runtimeMode: "relay_only" as const },
   });
 }
 
@@ -153,7 +155,54 @@ export async function PATCH(
       .set({ lastError: null, updatedAt: nowIso() })
       .where(eq(grokbots.id, id));
   }
-  return NextResponse.json({ ok: true });
+
+  let integrationTest: Awaited<ReturnType<typeof runRelayIntegrationTest>> | undefined;
+  if (touchedOutbound && body.clearOutboundWebhook !== true) {
+    const [after] = await db
+      .select({
+        url: grokbotsConfig.outboundWebhookUrl,
+        secret: grokbotsConfig.outboundWebhookSecret,
+      })
+      .from(grokbotsConfig)
+      .where(eq(grokbotsConfig.grokbotId, id))
+      .limit(1);
+    const hasRelay = Boolean((after?.url ?? "").trim() && (after?.secret ?? "").trim());
+    if (hasRelay) {
+      try {
+        integrationTest = await runRelayIntegrationTest(id, { trigger: "relay_saved" });
+        const errParts: string[] = [];
+        if (!integrationTest.relay.ok) {
+          errParts.push(
+            integrationTest.relay.error ?? `Relay HTTP ${integrationTest.relay.status}`,
+          );
+        }
+        const failed = integrationTest.manytalks.probes.filter((p) => !p.skipped && !p.ok);
+        if (failed.length) {
+          errParts.push(`Probes: ${failed.map((p) => p.id).join(", ")}`);
+        }
+        if (!integrationTest.e2e.ok) {
+          const bad = integrationTest.e2e.steps.filter((s) => !s.ok);
+          errParts.push(`E2E: ${bad.map((s) => s.id).join(", ") || "falhou"}`);
+        }
+        if (errParts.length) {
+          await db
+            .update(grokbots)
+            .set({ lastError: `Teste relay: ${errParts.join(" · ")}`, updatedAt: nowIso() })
+            .where(eq(grokbots.id, id));
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Falha no teste";
+        integrationTest = undefined;
+        await db
+          .update(grokbots)
+          .set({ lastError: msg, updatedAt: nowIso() })
+          .where(eq(grokbots.id, id));
+        return fail(msg, 400);
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true, integration_test: integrationTest ?? null });
 }
 
 export async function DELETE(

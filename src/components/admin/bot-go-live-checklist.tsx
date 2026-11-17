@@ -6,7 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseChecklistAck, type ChecklistAck } from "@/lib/admin/checklist-ack";
+import type { CapabilityProbe } from "@/lib/admin/manytalks-capability-probe";
 import { parseRoutineCabecalho } from "@/lib/runtime/parse-routine-cabecalho";
+import { responsesPathReady } from "@/lib/runtime/in-process-mode";
 import { appUrl } from "@/lib/utils";
 
 type Props = {
@@ -23,6 +25,53 @@ type OutboundState = {
   url: string | null;
   hasAuthValue: boolean;
 };
+
+type TestLine = {
+  key: string;
+  label: string;
+  ok: boolean;
+  skipped?: boolean;
+  detail?: string;
+};
+
+type IntegrationJson = {
+  all_ok?: boolean;
+  relay?: { ok?: boolean };
+  manytalks?: { probes?: CapabilityProbe[] };
+  e2e?: { ok?: boolean; steps?: { id: string; ok: boolean; detail?: string }[] };
+};
+
+function testLinesFromIntegration(j: IntegrationJson): TestLine[] {
+  const lines: TestLine[] = [];
+  for (const p of j.manytalks?.probes ?? []) {
+    lines.push({
+      key: `probe:${p.id}`,
+      label: p.name,
+      ok: p.ok,
+      skipped: p.skipped,
+      detail: p.detail,
+    });
+  }
+  for (const s of j.e2e?.steps ?? []) {
+    if (s.id === "error" && !s.ok) {
+      lines.push({ key: "e2e:error", label: "E2E", ok: false, detail: s.detail });
+      continue;
+    }
+    if (s.id === "error") continue;
+    lines.push({ key: `e2e:${s.id}`, label: `E2E — ${s.id}`, ok: s.ok, detail: s.detail });
+  }
+  return lines;
+}
+
+function integrationUserMessage(j: IntegrationJson) {
+  if (j.all_ok) {
+    return "Salvo. E2E ManyTalks OK — o Grok deve responder ✅ no chat dele.";
+  }
+  if (j.relay?.ok === false) {
+    return "Salvo. ManyTalks testado, mas o webhook do Grok não respondeu — verifique URL/chave.";
+  }
+  return "Salvo com falhas no E2E — veja abaixo. O Grok deve responder ❌ no chat.";
+}
 
 function StatusDot({ ok }: { ok: boolean }) {
   return (
@@ -53,15 +102,21 @@ export function BotGoLiveChecklist({
   const [autoTried, setAutoTried] = useState(false);
   const [showHeader, setShowHeader] = useState(false);
   const [webhookError, setWebhookError] = useState("");
+  const [published, setPublished] = useState(false);
+  const [testLines, setTestLines] = useState<TestLine[] | null>(null);
+  const [relayEditing, setRelayEditing] = useState(false);
 
   const origin = typeof window !== "undefined" ? window.location.origin : appUrl();
   const manytalksHook = `${origin}/api/hooks/manytalks`;
   const asaasHook = `${origin}/api/hooks/asaas/${grokbotId}`;
 
-  const relayOk = Boolean(outbound.url?.trim() && outbound.hasAuthValue);
+  const relayConfigured = Boolean(outbound.url?.trim());
+  const relayAuthorized = Boolean(outbound.url?.trim() && outbound.hasAuthValue);
+  const relayOk = relayAuthorized;
+  const responsesOk = responsesPathReady(relayConfigured, outbound.hasAuthValue);
   const manytalksOk = checklist.manytalks_webhook_ok;
   const asaasOk = !paymentsEnabled || checklist.asaas_webhook_ack;
-  const ready = manytalksOk && relayOk && asaasOk;
+  const ready = manytalksOk && published && responsesOk && asaasOk;
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/admin/grokbots/${grokbotId}`);
@@ -76,6 +131,7 @@ export function BotGoLiveChecklist({
     setUrlDraft(url ?? "");
     setHeaderDraft(authHeader?.trim() || "Authorization");
     setKeyDraft("");
+    setPublished(Number(j.bot?.manifestVersion ?? 0) > 0);
     setLoaded(true);
     return next;
   }, [grokbotId]);
@@ -119,10 +175,11 @@ export function BotGoLiveChecklist({
   const pendingLabel = useMemo(() => {
     const missing: string[] = [];
     if (!manytalksOk) missing.push("ManyTalks");
-    if (!relayOk) missing.push("respostas");
+    if (!published) missing.push("publicar manifest");
+    if (!responsesOk) missing.push("respostas");
     if (!asaasOk) missing.push("Asaas");
     return missing.join(" · ");
-  }, [manytalksOk, relayOk, asaasOk]);
+  }, [manytalksOk, published, responsesOk, asaasOk]);
 
   async function connectManytalks() {
     setWorking("webhook");
@@ -188,6 +245,22 @@ export function BotGoLiveChecklist({
     }
   }
 
+  async function runIntegrationTest() {
+    setWorking("relay");
+    onError("");
+    try {
+      const r = await fetch(`/api/admin/grokbots/${grokbotId}/relay-test`, { method: "POST" });
+      const j = (await r.json()) as IntegrationJson & { error?: string };
+      if (!r.ok && !j.e2e) throw new Error(j.error ?? "Falha no teste");
+      setTestLines(testLinesFromIntegration(j));
+      onMsg(integrationUserMessage(j));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Falha");
+    } finally {
+      setWorking(null);
+    }
+  }
+
   async function saveRelay() {
     if (!urlDraft.trim()) {
       onError("Informe a URL do webhook de respostas.");
@@ -214,14 +287,34 @@ export function BotGoLiveChecklist({
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "Falha ao salvar");
-      onMsg("Respostas conectadas.");
+      const it = j.integration_test as IntegrationJson | null | undefined;
+      if (it) {
+        setTestLines(testLinesFromIntegration(it));
+        onMsg(integrationUserMessage(it));
+      } else {
+        onMsg("Respostas conectadas.");
+      }
       await load();
+      setRelayEditing(false);
       onChanged?.();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Falha");
     } finally {
       setWorking(null);
     }
+  }
+
+  function startRelayEdit() {
+    setUrlDraft(outbound.url ?? "");
+    setKeyDraft("");
+    setRelayEditing(true);
+    setShowHeader(false);
+  }
+
+  function cancelRelayEdit() {
+    setUrlDraft(outbound.url ?? "");
+    setKeyDraft("");
+    setRelayEditing(false);
   }
 
   async function ackAsaas() {
@@ -334,67 +427,157 @@ export function BotGoLiveChecklist({
         </li>
 
         <li className="flex gap-3">
-          <StatusDot ok={relayOk} />
+          <StatusDot ok={responsesOk} />
           <div className="min-w-0 flex-1 space-y-3">
-            <div>
-              <p className="text-sm font-medium">2. Onde o bot responde</p>
-              <p className="text-xs text-[var(--grokbott-text-secondary)]">
-                Cole URL e chave do webhook da rotina (painel Webhook).
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <div className="space-y-1">
-                <Label htmlFor={`go-live-url-${grokbotId}`}>URL do webhook</Label>
-                <Input
-                  id={`go-live-url-${grokbotId}`}
-                  value={urlDraft}
-                  onChange={(e) => setUrlDraft(e.target.value)}
-                  placeholder="https://…"
-                  autoComplete="off"
-                  disabled={busy || working !== null}
-                />
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">2. Grok (webhook de respostas)</p>
+                <p className="text-xs text-[var(--grokbott-text-secondary)]">
+                  {relayOk && !relayEditing
+                    ? "Relay conectado. Use Testar integração ou Alterar URL/chave."
+                    : "Informe URL e chave da rotina. Ao salvar, rodamos o teste no ManyTalks."}
+                </p>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor={`go-live-key-${grokbotId}`}>Chave</Label>
-                <Input
-                  id={`go-live-key-${grokbotId}`}
-                  type="password"
-                  value={keyDraft}
-                  onChange={(e) => setKeyDraft(e.target.value)}
-                  placeholder={outbound.hasAuthValue ? "••••••••" : "crsr_…"}
-                  autoComplete="off"
-                  disabled={busy || working !== null}
-                />
-              </div>
-              <button
-                type="button"
-                className="w-fit text-xs text-[var(--grokbott-text-secondary)] underline-offset-2 hover:underline"
-                onClick={() => setShowHeader((v) => !v)}
-              >
-                {showHeader ? "Ocultar cabeçalho" : "Cabeçalho (raro)"}
-              </button>
-              {showHeader ? (
-                <div className="space-y-1">
-                  <Label htmlFor={`go-live-header-${grokbotId}`}>Cabeçalho</Label>
-                  <Input
-                    id={`go-live-header-${grokbotId}`}
-                    value={headerDraft}
-                    onChange={(e) => setHeaderDraft(e.target.value)}
-                    placeholder="Authorization"
-                    autoComplete="off"
-                    disabled={busy || working !== null}
-                  />
-                </div>
+              {relayOk && !relayEditing ? (
+                <span className="text-xs text-[var(--grokbott-success)]">Conectado</span>
               ) : null}
             </div>
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy || working !== null || !urlDraft.trim()}
-              onClick={() => void saveRelay()}
-            >
-              {working === "relay" ? "Salvando…" : relayOk ? "Atualizar" : "Salvar"}
-            </Button>
+
+            {relayOk && !relayEditing ? (
+              <div className="space-y-2">
+                <code className="block break-all rounded-md bg-[var(--grokbott-surface-1)] px-2 py-1.5 font-mono text-xs">
+                  {outbound.url}
+                </code>
+                <p className="text-xs text-[var(--grokbott-text-secondary)]">Chave salva no servidor.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy || working !== null}
+                    onClick={() => void runIntegrationTest()}
+                  >
+                    {working === "relay" ? "Testando…" : "Testar integração"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy || working !== null}
+                    onClick={startRelayEdit}
+                  >
+                    Alterar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor={`go-live-url-${grokbotId}`}>URL do webhook</Label>
+                    <Input
+                      id={`go-live-url-${grokbotId}`}
+                      value={urlDraft}
+                      onChange={(e) => setUrlDraft(e.target.value)}
+                      placeholder="https://…"
+                      autoComplete="off"
+                      disabled={busy || working !== null}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`go-live-key-${grokbotId}`}>Chave</Label>
+                    <Input
+                      id={`go-live-key-${grokbotId}`}
+                      type="password"
+                      value={keyDraft}
+                      onChange={(e) => setKeyDraft(e.target.value)}
+                      placeholder={outbound.hasAuthValue ? "Nova chave (opcional se manter)" : "crsr_…"}
+                      autoComplete="off"
+                      disabled={busy || working !== null}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="w-fit text-xs text-[var(--grokbott-text-secondary)] underline-offset-2 hover:underline"
+                    onClick={() => setShowHeader((v) => !v)}
+                  >
+                    {showHeader ? "Ocultar cabeçalho" : "Cabeçalho (raro)"}
+                  </button>
+                  {showHeader ? (
+                    <div className="space-y-1">
+                      <Label htmlFor={`go-live-header-${grokbotId}`}>Cabeçalho</Label>
+                      <Input
+                        id={`go-live-header-${grokbotId}`}
+                        value={headerDraft}
+                        onChange={(e) => setHeaderDraft(e.target.value)}
+                        placeholder="Authorization"
+                        autoComplete="off"
+                        disabled={busy || working !== null}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy || working !== null || !urlDraft.trim()}
+                    onClick={() => void saveRelay()}
+                  >
+                    {working === "relay" ? "Salvando e testando…" : "Salvar e testar"}
+                  </Button>
+                  {relayOk && relayEditing ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy || working !== null}
+                      onClick={cancelRelayEdit}
+                    >
+                      Cancelar
+                    </Button>
+                  ) : null}
+                </div>
+              </>
+            )}
+            {testLines?.length ? (
+              <ul className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-[var(--grokbott-hairline)] p-2 text-xs">
+                {testLines.map((p) => (
+                  <li key={p.key} className="flex gap-2">
+                    <span
+                      className={
+                        p.skipped
+                          ? "text-[var(--grokbott-text-secondary)]"
+                          : p.ok
+                            ? "text-[var(--grokbott-success)]"
+                            : "text-[var(--grokbott-danger)]"
+                      }
+                    >
+                      {p.skipped ? "—" : p.ok ? "✓" : "✗"}
+                    </span>
+                    <span>
+                      {p.label}
+                      {p.detail ? ` — ${p.detail}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </li>
+
+        <li className="flex gap-3">
+          <StatusDot ok={published} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-sm font-medium">3. Manifest publicado</p>
+            <p className="text-xs text-[var(--grokbott-text-secondary)]">
+              Webhooks só usam configuração após Publicar no topo do bot.
+            </p>
+            {published ? (
+              <span className="text-xs text-[var(--grokbott-success)]">Publicado</span>
+            ) : (
+              <span className="text-xs text-[var(--grokbott-warning)]">Ainda não publicou</span>
+            )}
           </div>
         </li>
 
@@ -403,7 +586,7 @@ export function BotGoLiveChecklist({
             <StatusDot ok={asaasOk} />
             <div className="min-w-0 flex-1 space-y-2">
               <div>
-                <p className="text-sm font-medium">3. Webhook Asaas</p>
+                <p className="text-sm font-medium">4. Webhook Asaas</p>
                 <p className="text-xs text-[var(--grokbott-text-secondary)]">
                   No painel Asaas, cadastre esta URL e marque aqui quando terminar.
                 </p>

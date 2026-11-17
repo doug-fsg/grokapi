@@ -86,6 +86,9 @@ export function createManytalksClient(opts: MtClient) {
     createPipeline(body: unknown) {
       return mtFetch(opts, "POST", "/custom_attribute_definitions", body);
     },
+    updatePipeline(pipelineId: number, body: unknown) {
+      return mtFetch(opts, "PATCH", `/custom_attribute_definitions/${pipelineId}`, body);
+    },
     getConversation(displayId: string | number) {
       return mtFetch<Record<string, unknown>>(opts, "GET", `/conversations/${displayId}`);
     },
@@ -130,6 +133,17 @@ export function createManytalksClient(opts: MtClient) {
         content_type: "text",
       });
     },
+    toggleConversationStatus(
+      displayId: string | number,
+      status: "open" | "resolved" | "pending",
+    ) {
+      return mtFetch(opts, "POST", `/conversations/${displayId}/toggle_status`, { status });
+    },
+    assignConversation(displayId: string | number, assigneeId: number) {
+      return mtFetch(opts, "POST", `/conversations/${displayId}/assignments`, {
+        assignee_id: assigneeId,
+      });
+    },
     getLabels(displayId: string | number) {
       return mtFetch<{ payload?: string[] } | string[]>(
         opts,
@@ -148,6 +162,16 @@ export function createManytalksClient(opts: MtClient) {
     },
     getContact(contactId: number) {
       return mtFetch<Record<string, unknown>>(opts, "GET", `/contacts/${contactId}`);
+    },
+    searchContacts(q: string) {
+      const query = encodeURIComponent(q.trim());
+      return mtFetch<unknown>(opts, "GET", `/contacts/search?q=${query}`);
+    },
+    createContact(body: Record<string, unknown>) {
+      return mtFetch<unknown>(opts, "POST", `/contacts`, body);
+    },
+    updateContact(contactId: number, body: Record<string, unknown>) {
+      return mtFetch<unknown>(opts, "PATCH", `/contacts/${contactId}`, body);
     },
     filterContacts(payload: unknown[], page = 1, perPage = 50) {
       return mtFetch<{ payload?: unknown[] } | unknown[]>(
@@ -178,6 +202,33 @@ export function createManytalksClient(opts: MtClient) {
     },
     listWebhooks() {
       return mtFetch<unknown>(opts, "GET", "/webhooks");
+    },
+    createLabel(title: string) {
+      return mtFetch(opts, "POST", "/labels", {
+        label: {
+          title,
+          color: "#1f93ff",
+          show_on_sidebar: true,
+        },
+      });
+    },
+    getContactLabels(contactId: number) {
+      return mtFetch<{ payload?: string[] } | string[]>(
+        opts,
+        "GET",
+        `/contacts/${contactId}/labels`,
+      );
+    },
+    setContactLabels(contactId: number, labels: string[]) {
+      return mtFetch(opts, "POST", `/contacts/${contactId}/labels`, { labels });
+    },
+    createConversation(body: {
+      inbox_id: number;
+      contact_id: number;
+      source_id?: string;
+      message?: { content: string };
+    }) {
+      return mtFetch<Record<string, unknown>>(opts, "POST", "/conversations", body);
     },
     createWebhook(url: string, subscriptions: string[]) {
       return mtFetch(opts, "POST", "/webhooks", {

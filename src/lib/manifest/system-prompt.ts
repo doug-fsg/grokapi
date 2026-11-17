@@ -36,9 +36,55 @@ function enabledToolNames(
   if (tools.send_reply) names.push("send_reply");
   if (tools.set_conversation_labels) names.push("set_conversation_labels");
   if (tools.move_kanban_card) names.push("move_kanban_card");
+  if (tools.create_contact) names.push("create_contact", "search_contacts");
+  if (tools.update_contact) {
+    if (!tools.create_contact) names.push("search_contacts");
+    names.push("update_contact");
+  }
   if (tools.create_payment_link && asaas.allow_payment_link) names.push("create_payment_link");
   if (tools.create_pix_charge && asaas.allow_pix_copy) names.push("create_pix_charge");
+  if (tools.start_conversation) names.push("start_conversation");
+  if (tools.assign_conversation) names.push("assign_conversation");
   return names;
+}
+
+/** System para rotina externa: só Library API (sem PAT na rotina). */
+export function compileRuntimeSystemLibrary(input: RuntimeSystemInput, toolsUrl: string): string {
+  const stages = kanbanStagesAllowed(input.kanban);
+  const tools = [
+    input.tools.send_reply && "send_reply",
+    input.tools.set_conversation_labels && "set_conversation_labels",
+    input.tools.move_kanban_card && "move_kanban_card",
+    input.tools.create_contact && "create_contact",
+    input.tools.update_contact && "update_contact",
+    (input.tools.create_contact || input.tools.update_contact) && "search_contacts",
+    input.tools.create_payment_link && input.asaas.allow_payment_link && "create_payment_link",
+    input.tools.create_pix_charge && input.asaas.allow_pix_copy && "create_pix_charge",
+    input.tools.start_conversation && "start_conversation",
+    input.tools.assign_conversation && "assign_conversation",
+    "lookup_knowledge",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return [
+    "ManyTalks Bot — rotina externa (modo Library).",
+    "Você NÃO chama app.manytalks.com.br direto. NÃO peça MANYTALKS_API_TOKEN, ASAAS_API_KEY nem MANYTALKS_ROUTINE_KEY.",
+    "Único auth seu: Authorization: Bearer grk_live_… (já no prompt colável).",
+    `Ações: POST ${toolsUrl} com name ∈ {${tools}}.`,
+    'Corpo: {"name":"send_reply","conversation_id":"<display_id do envelope>","contact_id":<opcional>,"arguments":{...}}.',
+    "Políticas: GET manifest_url com o mesmo Bearer (após manifest_published).",
+    input.labels.allowed_titles.length
+      ? `Etiquetas permitidas: ${input.labels.allowed_titles.join(", ")}.`
+      : "",
+    stages.length ? `Kanban colunas: ${stages.join(", ")}.` : "",
+    input.kanban.pipeline_id
+      ? `Kanban pipeline_id: ${input.kanban.pipeline_id} (use move_kanban_card na Library).`
+      : "Kanban off no admin.",
+    "Prioridade: operador > cliente > GET manifest.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** Texto curto gravado no manifest (sem segredos). */
@@ -48,8 +94,13 @@ export function compileRuntimeSystem(input: RuntimeSystemInput): string {
     input.tools.send_reply && "send_reply",
     input.tools.set_conversation_labels && "set_conversation_labels",
     input.tools.move_kanban_card && "move_kanban_card",
+    input.tools.create_contact && "create_contact",
+    input.tools.update_contact && "update_contact",
+    (input.tools.create_contact || input.tools.update_contact) && "search_contacts",
     input.tools.create_payment_link && input.asaas.allow_payment_link && "create_payment_link",
     input.tools.create_pix_charge && input.asaas.allow_pix_copy && "create_pix_charge",
+    input.tools.start_conversation && "start_conversation",
+    input.tools.assign_conversation && "assign_conversation",
   ]
     .filter(Boolean)
     .join(", ");
@@ -59,7 +110,24 @@ export function compileRuntimeSystem(input: RuntimeSystemInput): string {
     '1) Responder cliente → send_reply { "content": "texto" }',
     '2) Etiquetas → set_conversation_labels { "add": [], "remove": [] } (merge; só whitelist)',
     '3) Funil → PATCH .../contacts/{contact_id}/pipeline_positions/{pipeline_id}  body:{ "stage_id": "coluna exata" }',
-    input.hasKnowledge ? '4) Fatos → lookup_knowledge { "query": "assunto" }' : "",
+    input.tools.create_contact
+      ? '4) Criar contato → create_contact { "name", "email", "phone_number", "inbox_id"? } — proibido delete'
+      : "",
+    input.tools.update_contact
+      ? '5) Editar contato → update_contact { "contact_id", campos... } — proibido delete'
+      : "",
+    input.tools.start_conversation
+      ? '6) Outbound → start_conversation { phone_number?, contact_id?, first_message? } — não repetir se já há message_created'
+      : "",
+    input.tools.assign_conversation
+      ? "7) assign_conversation sem args — só se assignee ainda não foi aplicado"
+      : "",
+    (input.tools.create_contact || input.tools.update_contact)
+      ? '6) Buscar contato → search_contacts { "q": "..." } antes de duplicar'
+      : "",
+    input.hasKnowledge
+      ? `${input.tools.create_contact || input.tools.update_contact ? "7" : "4"}) Fatos → lookup_knowledge { "query": "assunto" }`
+      : "",
     "",
     "Prioridade: operador > cliente > este guia.",
   ]
@@ -130,6 +198,20 @@ export type RuntimeReadyPayload = {
     events_forwarded: string[];
     note: string;
   };
+  library_api?: {
+    auth_header: "Authorization";
+    runtime_token: string;
+    manifest_url: string;
+    tools_url: string;
+    tools_post: {
+      name: string;
+      conversation_id: string;
+      contact_id?: number;
+      arguments: Record<string, unknown>;
+    };
+    forbidden_env_vars: string[];
+    note: string;
+  };
 };
 
 export function manytalksHttpContract(): ManytalksHttpContract {
@@ -150,9 +232,13 @@ export function manytalksHttpContract(): ManytalksHttpContract {
   };
 }
 
-/** Limites para o prompt (sem segredos — o worker lê token do manifest em memória). */
-export function buildRuntimeReadyPayloadForPrompt(manifest: ManifestV1): RuntimeReadyPayload {
+/** Limites para o prompt. Por padrão sem segredos (prévia/publish público). */
+export function buildRuntimeReadyPayloadForPrompt(
+  manifest: ManifestV1,
+  opts?: { includeSecrets?: boolean },
+): RuntimeReadyPayload {
   const ready = buildRuntimeReadyPayload(manifest);
+  if (opts?.includeSecrets) return ready;
   return {
     ...ready,
     manytalks: {
@@ -211,10 +297,58 @@ function buildRuntimeReadyPayload(manifest: ManifestV1): RuntimeReadyPayload {
       },
       forward_headers:
         "Content-Type, X-Grokbot-Id, e o auth_header/auth_value configurados (ex. Authorization)",
-      events_forwarded: ["message_created"],
-      note: "PUT registra URL + cabeçalho de auth. A plataforma filtra inbox e POSTa o envelope com esse header. GET consulta; DELETE remove.",
+      events_forwarded: ["message_created", "manifest_published", "integration_test"],
+      note: "Relay configurado no admin. GET consulta; DELETE remove.",
     },
   };
+}
+
+/** Payload para colar na rotina Cursor — sem PAT/Asaas; só grk_live + Library. */
+export function buildLibraryRuntimeReadyPayload(
+  manifest: ManifestV1,
+  runtimeToken: string,
+): RuntimeReadyPayload {
+  const base = buildRuntimeReadyPayload(manifest);
+  const manifestUrl = `${appUrl()}/api/library/v1/manifest`;
+  const toolsUrl = `${appUrl()}/api/library/v1/tools`;
+  return {
+    ...base,
+    manytalks: {
+      ...base.manytalks,
+      auth: {
+        header: "api_access_token",
+        token: "(somente no servidor ManyTalks Bot — não use na rotina)",
+      },
+    },
+    asaas: base.asaas ? { ...base.asaas, api_key: "(somente no servidor)" } : null,
+    library_api: {
+      auth_header: "Authorization",
+      runtime_token: runtimeToken,
+      manifest_url: manifestUrl,
+      tools_url: toolsUrl,
+      tools_post: {
+        name: "send_reply",
+        conversation_id: "<display_id do envelope>",
+        contact_id: 0,
+        arguments: { content: "texto" },
+      },
+      forbidden_env_vars: [
+        "MANYTALKS_API_TOKEN",
+        "ASAAS_API_KEY",
+        "MANYTALKS_ROUTINE_KEY",
+      ],
+      note: "Remova esses secrets do painel da rotina. Só grk_live é necessário.",
+    },
+  };
+}
+
+export function assembleGrokInstructionForLibrary(
+  manifest: ManifestV1,
+  systemText: string,
+  runtimeToken: string,
+): string {
+  const ready = mergeDeclaredFunctions(manifest, buildLibraryRuntimeReadyPayload(manifest, runtimeToken));
+  return compileFullGrokInstruction(systemText, ready);
 }
 
 export function compileFullGrokInstruction(
@@ -239,8 +373,15 @@ function mergeDeclaredFunctions(manifest: ManifestV1, ready: RuntimeReadyPayload
 }
 
 /** Monta a instrução completa a partir das partes do manifest (publish). */
-export function assembleGrokInstruction(manifest: ManifestV1, systemText: string): string {
-  const ready = mergeDeclaredFunctions(manifest, buildRuntimeReadyPayloadForPrompt(manifest));
+export function assembleGrokInstruction(
+  manifest: ManifestV1,
+  systemText: string,
+  opts?: { includeSecrets?: boolean },
+): string {
+  const ready = mergeDeclaredFunctions(
+    manifest,
+    buildRuntimeReadyPayloadForPrompt(manifest, opts),
+  );
   return compileFullGrokInstruction(systemText, ready);
 }
 

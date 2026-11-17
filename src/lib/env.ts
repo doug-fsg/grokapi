@@ -41,6 +41,14 @@ export function masterEncryptionKey() {
   return process.env.MASTER_ENCRYPTION_KEY ?? "";
 }
 
+export function xaiApiKey() {
+  return (process.env.XAI_API_KEY ?? "").trim();
+}
+
+export function xaiConfigured() {
+  return Boolean(xaiApiKey());
+}
+
 /** API key do console OpenCode Zen (varredura de padrões — free cascade). */
 export function openCodeApiKey() {
   return (process.env.OPENCODE_API_KEY ?? "").trim();

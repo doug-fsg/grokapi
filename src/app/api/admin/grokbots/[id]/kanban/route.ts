@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { grokbots, grokbotsSecrets } from "@/lib/db/schema";
 import { adminGuard, fail } from "@/lib/admin/http";
 import { createManytalksClient, unwrapList } from "@/lib/manytalks/client";
+import { buildKanbanPipelineCreateBody } from "@/lib/manytalks/kanban-pipeline";
 import { manytalksTokenFromEnc } from "@/lib/manytalks/token";
 
 export async function GET(
@@ -75,28 +76,13 @@ export async function POST(
       accountId: bot.manytalksAccountId,
       token,
     });
-    const created = await client.createPipeline({
-      custom_attribute_definition: {
-        attribute_display_name: body.name,
-        attribute_key:
-          body.key ??
-          body.name
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/\s+/g, "_"),
-        attribute_display_type: "list",
-        attribute_model: "contact_attribute",
-        is_kanban: true,
-        attribute_values: {
-          stages: body.stages.map((s) => ({
-            name: s.name,
-            color: s.color ?? "#6366f1",
-          })),
-          ownership_mode: "linked",
-        },
-      },
-    });
+    const created = await client.createPipeline(
+      buildKanbanPipelineCreateBody({
+        name: body.name,
+        key: body.key,
+        stages: body.stages,
+      }),
+    );
     return NextResponse.json({ pipeline: created });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Falha.";

@@ -21,9 +21,13 @@ export async function dashboardKpis(grokbotId: string) {
     String(p.status ?? "").toUpperCase().match(/RECEIVED|CONFIRMED|PAID/),
   );
   const handled = events.filter((e) => e.type === "message_handled").length;
+  const forwarded = events.filter((e) => e.type === "message_forwarded").length;
+  const kanbanMoves = events.filter((e) => e.type === "kanban.moved").length;
   const paidAmount = paid.reduce((s, p) => s + Number(p.amount ?? 0), 0);
   return {
     messagesHandled: handled,
+    messagesForwarded: forwarded,
+    kanbanMoves,
     chargesCreated: events.filter((e) => e.type.startsWith("asaas.")).length + payments.length,
     paymentsCount: payments.length,
     paidCount: paid.length,

@@ -13,6 +13,8 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 type Kpis = {
   messagesHandled: number;
+  messagesForwarded?: number;
+  kanbanMoves?: number;
   chargesCreated: number;
   paidCount: number;
   paidAmount: number;
@@ -30,7 +32,8 @@ export function DashboardView({ name, kpis }: { name: string; kpis: Kpis }) {
     kpis.messagesHandled > 0
       ? Math.round((kpis.paidCount / kpis.messagesHandled) * 100)
       : 0;
-  const maxFunnel = Math.max(kpis.messagesHandled, kpis.chargesCreated, kpis.paidCount, 1);
+  const kanban = kpis.kanbanMoves ?? 0;
+  const maxFunnel = Math.max(kpis.messagesHandled, kanban, kpis.chargesCreated, kpis.paidCount, 1);
 
   return (
     <div className="dash-shell min-h-screen">
@@ -115,6 +118,9 @@ export function DashboardView({ name, kpis }: { name: string; kpis: Kpis }) {
                 max={maxFunnel}
                 tone="muted"
               />
+              {kanban > 0 && (
+                <FunnelRow label="Funil (kanban)" value={kanban} max={maxFunnel} tone="mid" />
+              )}
               <FunnelRow
                 label="Cobrou"
                 value={kpis.chargesCreated}

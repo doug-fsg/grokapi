@@ -9,6 +9,8 @@
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "start:all": "concurrently -k -n web,worker -c cyan,magenta \"pnpm start\" \"pnpm worker\"",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/lib/manifest/*.test.ts src/lib/manytalks/*.test.ts src/lib/admin/*.test.ts src/lib/runtime/*.test.ts",
+    "test:probes": "tsx scripts/test-integration-probes.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",

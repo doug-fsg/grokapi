@@ -147,5 +147,7 @@ export async function rotateRuntimeToken(grokbotId: string) {
     label: "rotated",
     createdAt: nowIso(),
   });
+  const { pruneRuntimeTokens } = await import("@/lib/library/runtime-token-grace");
+  await pruneRuntimeTokens(grokbotId);
   return token;
 }

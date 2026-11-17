@@ -15,16 +15,32 @@ export type ToolsDraft = {
   send_reply: boolean;
   set_conversation_labels: boolean;
   move_kanban_card: boolean;
+  create_contact: boolean;
+  update_contact: boolean;
   create_payment_link: boolean;
   create_pix_charge: boolean;
+  start_conversation: boolean;
+  assign_conversation: boolean;
 };
 
 const TOOLS: { key: keyof ToolsDraft; label: string; hint: string }[] = [
   { key: "send_reply", label: "Responder a mensagem", hint: "Envia o texto no ManyTalks" },
   { key: "set_conversation_labels", label: "Aplicar etiquetas", hint: "Marca a conversa" },
   { key: "move_kanban_card", label: "Mover no funil", hint: "Só com funil ligado" },
+  { key: "create_contact", label: "Criar contato", hint: "Nunca exclui" },
+  { key: "update_contact", label: "Editar contato", hint: "PATCH — nunca exclui" },
   { key: "create_payment_link", label: "Link de pagamento", hint: "Asaas" },
   { key: "create_pix_charge", label: "PIX copia e cola", hint: "Asaas" },
+  {
+    key: "start_conversation",
+    label: "Iniciar conversa (pacote)",
+    hint: "Contato + abrir + 1ª msg no servidor",
+  },
+  {
+    key: "assign_conversation",
+    label: "Atribuir conversa",
+    hint: "Atribui a conversa ao usuário padrão",
+  },
 ];
 
 type Props = {
@@ -103,7 +119,9 @@ export function PromptEditor({
       if (typeof j.runtime_token === "string" && j.runtime_token) {
         onRuntimeToken?.(j.runtime_token);
       }
-      setCopyMsg("Prompt copiado. Cole no ManyTalks Bot → depois Runtime: POST para / chave / cabeçalho.");
+      setCopyMsg(
+        "Prompt copiado (modo Library). Na rotina: só GROKBOT_RUNTIME_TOKEN — remova MANYTALKS_API_TOKEN.",
+      );
     } catch (err) {
       setCopyMsg(err instanceof Error ? err.message : "Falha ao copiar");
     } finally {

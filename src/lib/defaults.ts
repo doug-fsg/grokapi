@@ -4,14 +4,21 @@ import type {
   PostPaymentConfig,
   ToolsPolicy,
 } from "@/lib/types/manifest";
+import { defaultManytalksAssigneeId } from "@/lib/manytalks/default-assignee";
 
 export const defaultToolsPolicy: ToolsPolicy = {
   send_reply: true,
   set_conversation_labels: true,
   move_kanban_card: false,
+  create_contact: true,
+  update_contact: true,
   create_payment_link: false,
   create_pix_charge: false,
+  start_conversation: true,
+  assign_conversation: true,
 };
+
+export const defaultContactsPolicy = { allow_delete: false as const };
 
 export const defaultConversationRules: ConversationRules = {
   statuses: ["open", "pending"],
@@ -19,6 +26,10 @@ export const defaultConversationRules: ConversationRules = {
   only_when_unassigned: false,
   ignore_private: true,
   execute_tools_before_reply: true,
+  default_assignee_id: defaultManytalksAssigneeId(),
+  auto_assign_on_message: true,
+  relay_when_unassigned: true,
+  relay_when_assigned_to_me: true,
 };
 
 export function emptyKanban() {

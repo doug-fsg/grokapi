@@ -1,127 +1,88 @@
 import type { ManifestV1 } from "@/lib/types/manifest";
+import { toolsFromPolicy } from "@/lib/grok/tools";
+import { kanbanStagesAllowed } from "@/lib/manifest/system-prompt";
 import { appUrl } from "@/lib/utils";
-import { assembleGrokInstruction, compileRuntimeSystem } from "@/lib/manifest/system-prompt";
 
-/**
- * Prompt único colável: arquitetura + limites + token grk_live + passos de webhook.
- * Gerado só no admin (nunca grava o token no snapshot publicado).
- */
+function enabledTools(m: ManifestV1): string[] {
+  return toolsFromPolicy(m).map((t) => (t as { function: { name: string } }).function.name);
+}
+
+/** Prompt curto para chat novo do Grok — sem setup de relay/Cursor nem API ManyTalks direta. */
 export function buildPasteableGrokBotSetup(input: {
   manifest: ManifestV1;
   runtimeToken: string;
 }): string {
   const base = appUrl();
-  const registerUrl = `${base}/api/library/v1/outbound-webhook`;
   const manifestUrl = `${base}/api/library/v1/manifest`;
+  const toolsUrl = `${base}/api/library/v1/tools`;
   const token = input.runtimeToken;
   const m = input.manifest;
-  const inboxes = m.manytalks.enabled_inbox_ids.join(", ") || "(nenhuma)";
-  const labels = m.labels.allowed_titles.join(", ") || "(nenhuma)";
-  const stages = m.kanban.stages_allowed.join(", ") || "(nenhuma)";
-  const pauseLabels = m.labels.pause_bot_on.join(", ") || "(nenhuma)";
-  const pauseStages = m.kanban.pause_bot_stages.join(", ") || "(nenhuma)";
+  const tools = enabledTools(m);
+  const inboxes = m.manytalks.enabled_inbox_ids.join(", ");
+  const labels =
+    m.labels.allowed_titles.length > 0 ? m.labels.allowed_titles.join(", ") : "ver GET /manifest";
+  const stages = kanbanStagesAllowed({
+    pipeline_id: m.kanban.pipeline_id,
+    stages_allowed: m.kanban.stages_allowed,
+    pause_bot_stages: m.kanban.pause_bot_stages,
+    stage_rules: m.kanban.stage_rules,
+  });
+  const knowledgeNote =
+    (m.prompt.knowledge_entries?.length ?? 0) > 0 || m.prompt.knowledge.trim()
+      ? "Knowledge completa em GET /manifest."
+      : "Sem knowledge cadastrada.";
 
-  const systemCore = assembleGrokInstruction(
-    m,
-    compileRuntimeSystem({
-      tools: m.tools_policy,
-      labels: m.labels,
-      kanban: {
-        pipeline_id: m.kanban.pipeline_id,
-        stages_allowed: m.kanban.stages_allowed,
-        pause_bot_stages: m.kanban.pause_bot_stages,
-        stage_rules: m.kanban.stage_rules,
-      },
-      asaas: {
-        environment: m.asaas.environment,
-        allow_payment_link: m.asaas.allow_payment_link,
-        allow_pix_copy: m.asaas.allow_pix_copy,
-      },
-      hasKnowledge: (m.prompt.knowledge_entries?.length ?? 0) > 0,
-      executeToolsBeforeReply: m.conversation_rules.execute_tools_before_reply,
-    }),
-  );
+  const runtimeJson = {
+    grokbot_id: m.grokbot.id,
+    account_id: m.manytalks.account_id,
+    inboxes: m.manytalks.enabled_inbox_ids,
+    auth: `Bearer ${token}`,
+    manifest_url: manifestUrl,
+    tools_url: toolsUrl,
+    tools_enabled: tools,
+    webhook_events: ["message_created", "manifest_published", "integration_test"],
+    conversation_id: "display_id no envelope (não é o id interno)",
+    limits: {
+      labels_allowed: m.labels.allowed_titles,
+      labels_pause_bot: m.labels.pause_bot_on,
+      kanban_pipeline_id: m.kanban.pipeline_id,
+      kanban_stages_allowed: stages,
+    },
+  };
 
-  return `# ManyTalks Bot — configuração em um único prompt
-ManyTalks Bot: ${m.grokbot.name} (${m.grokbot.id})
-Account ManyTalks: ${m.manytalks.account_id}
-Inboxes liberadas: ${inboxes}
-Etiquetas: ${labels}
-Kanban colunas: ${stages} | pipeline_id: ${m.kanban.pipeline_id ?? "null"}
-Pausar bot em etiquetas: ${pauseLabels}
-Pausar bot em estágios: ${pauseStages}
+  return `# ${m.grokbot.name} — atendimento ManyTalks (conta ${m.manytalks.account_id})
 
-## Como funciona (leia antes de agir)
-1. ManyTalks já envia message_created para a plataforma (${base}/api/hooks/manytalks).
-2. A plataforma filtra account + inbox + regras e POSTa um envelope limpo no SEU webhook.
-3. Você NÃO registra webhook no ManyTalks. Você cria um endpoint HTTPS e registra a URL na plataforma.
-4. Sem o PUT de registro, nenhuma mensagem chega. Não peça grk_live_ ao operador — o token já está abaixo.
+Você atende conversas da inbox **${inboxes}**. O operador já configurou relay e publicou o manifest — **não peça** tokens, chaves ou PAT ao operador.
 
-## Setup obrigatório (faça agora, nesta ordem)
-A) Crie/use a rotina HTTPS que aceite POST JSON do envelope (seção abaixo).
-B) No painel da rotina, copie: URL do webhook + nome do cabeçalho Authorization + valor da chave.
-   Você NÃO enxerga esses valores — o operador/dev cola no PUT (não peça a chave no chat).
-C) Registre na plataforma (operador ou você, se tiver os valores):
+## Sua API (única)
+Todas as chamadas: header \`Authorization: Bearer ${token}\`
 
-PUT ${registerUrl}
-Authorization: Bearer ${token}
-Content-Type: application/json
+1. **GET** \`${manifestUrl}\` — prompt, knowledge, regras (${knowledgeNote})
+2. **POST** \`${toolsUrl}\` — executar ação no ManyTalks/Asaas (o servidor guarda credenciais)
 
-{
-  "url": "URL_DO_PAINEL",
-  "auth_header": "Authorization",
-  "auth_value": "VALOR_EXATO_DO_PAINEL"
-}
+Corpo do POST /tools:
+\`\`\`json
+{"name":"send_reply","conversation_id":"<do envelope>","contact_id":null,"arguments":{"content":"..."}}
+\`\`\`
 
-Notas: auth_header = nome exato do cabeçalho do painel (quase sempre Authorization).
-auth_value = valor completo (ex. Bearer …). Campo legado "secret" ainda é aceito como alias de auth_value.
-D) Se a resposta tiver "configured": true, avise: "Relay ativo."
-E) Confirme com GET (mesmo Authorization):
+Tools ativas: ${tools.join(", ")}.
+Contatos: pode criar/editar (search_contacts, create_contact, update_contact). **Nunca** excluir contato.
+Para falar com alguém sem conversa aberta: **start_conversation** (1 chamada — servidor cria/abre/atribui). Na rotina normal (cliente escreveu), use só **send_reply** — o servidor já pode ter atribuído você (campo manytalks.auto_assigned no envelope).
 
-GET ${registerUrl}
-Authorization: Bearer ${token}
+## Quando chegar POST no seu webhook
+| event | ação |
+|-------|------|
+| message_created | GET /manifest se ainda não carregou nesta sessão; responda com POST /tools |
+| manifest_published | GET /manifest de novo |
+| integration_test | Responda no chat: só **✅** se \`ok:true\`, ou **❌** + passo falho. Asaas sem chave não conta como falha (\`probes\` skipped). Não use tools |
 
-## Token e URLs (já preenchidos — use estes valores)
-runtime_token: ${token}
-manifest_url: ${manifestUrl}
-outbound_register_url: ${registerUrl}
-Nota: este token foi gerado ao copiar o prompt; trate como segredo. Se já vazou no chat, peça ao operador rotacionar.
+Envelope útil: \`manytalks.conversation_id\`, \`manytalks.content\`, \`manytalks.contact_id\`, \`labels\`.
 
-## Envelope que a plataforma envia no seu webhook (POST)
-Headers sempre: Content-Type: application/json, X-Grokbot-Id: ${m.grokbot.id}
-Se auth_header + auth_value foram salvos no PUT, a plataforma também envia esse cabeçalho exato
-(ex. Authorization: <auth_value>) — não usa X-Grokbot-Forward-Secret.
+Etiquetas (whitelist): ${labels}. Não chame app.manytalks.com.br direto.
 
-{
-  "schema_version": "1.0",
-  "event": "message_created",
-  "grokbot_id": "${m.grokbot.id}",
-  "manytalks": {
-    "account_id": ${m.manytalks.account_id},
-    "conversation_id": "...",
-    "inbox_id": ${m.manytalks.enabled_inbox_ids[0] ?? 0},
-    "contact_id": null,
-    "contact_name": null,
-    "status": "open",
-    "message_id": "...",
-    "from": "client",
-    "content": "texto do cliente"
-  },
-  "labels": [],
-  "received_at": "ISO-8601"
-}
-
-Filtros que a plataforma já aplica: só inboxes ${inboxes}; tipicamente só incoming público.
-No seu lado: ignore se labels tiver ${pauseLabels || "(nenhuma de pausa)"}; ignore estágios ${pauseStages || "Ganho/Perdido/Fechado"} se souber a coluna.
-
-## Depois do relay ativo — o que fazer com cada mensagem
-- Responder / etiquetas / kanban via HTTP ManyTalks (api_runtime.manytalks.http).
-- Kanban: PATCH {base}/api/v1/accounts/{account_id}/contacts/{contact_id}/pipeline_positions/{pipeline_id}
-  body: {"stage_id":"Novo"} — contact_id no envelope; pipeline_id=${m.kanban.pipeline_id ?? "null"}; colunas: ${stages}.
-- Evento opcional playbook_patterns no webhook: padrões (tom, venda vs suporte, gatilhos, silêncio, ranking de atendente) aprovados pelo operador.
-- Mensagens saem com o nome do dono do PAT (esperado).
-
----
-${systemCore}
+## Runtime
+\`\`\`json
+${JSON.stringify(runtimeJson, null, 2)}
+\`\`\`
 `;
 }
