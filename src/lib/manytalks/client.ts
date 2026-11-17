@@ -189,6 +189,9 @@ export function createManytalksClient(opts: MtClient) {
         webhook: { url, subscriptions },
       });
     },
+    deleteWebhook(id: number) {
+      return mtFetch(opts, "DELETE", `/webhooks/${id}`);
+    },
   };
 }
 

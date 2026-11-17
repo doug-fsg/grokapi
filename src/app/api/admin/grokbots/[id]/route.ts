@@ -10,6 +10,7 @@ import {
   dashboards,
 } from "@/lib/db/schema";
 import { adminGuard, fail } from "@/lib/admin/http";
+import { deleteManytalksWebhook } from "@/lib/admin/register-manytalks-webhook";
 import { mergeChecklistAck, type ChecklistAck } from "@/lib/admin/checklist-ack";
 import { normalizeOutboundAuth } from "@/lib/runtime/outbound-forward";
 import { nowIso } from "@/lib/utils";
@@ -162,6 +163,11 @@ export async function DELETE(
   const { error } = await adminGuard();
   if (error) return error;
   const { id } = await ctx.params;
-  await getDb().delete(grokbots).where(eq(grokbots.id, id));
-  return NextResponse.json({ ok: true });
+  const db = getDb();
+  const [bot] = await db.select().from(grokbots).where(eq(grokbots.id, id)).limit(1);
+  if (!bot) return fail("Não encontrado.", 404);
+
+  const manytalksWebhook = await deleteManytalksWebhook(id);
+  await db.delete(grokbots).where(eq(grokbots.id, id));
+  return NextResponse.json({ ok: true, manytalksWebhook });
 }

@@ -143,3 +143,50 @@ export async function registerManytalksWebhook(grokbotId: string) {
     alreadyExisted: result.alreadyExisted,
   };
 }
+
+export type ManytalksWebhookCleanup =
+  | { status: "deleted"; webhookId: number }
+  | { status: "not_found" }
+  | { status: "skipped"; reason: string }
+  | { status: "failed"; error: string };
+
+/** Remove na account ManyTalks o webhook apontando para este app (mesma URL do register). */
+export async function deleteManytalksWebhook(grokbotId: string): Promise<ManytalksWebhookCleanup> {
+  const db = getDb();
+  const [bot] = await db.select().from(grokbots).where(eq(grokbots.id, grokbotId)).limit(1);
+  if (!bot) return { status: "skipped", reason: "bot não encontrado" };
+
+  const [secrets] = await db
+    .select()
+    .from(grokbotsSecrets)
+    .where(eq(grokbotsSecrets.grokbotId, grokbotId))
+    .limit(1);
+  const token = manytalksTokenFromEnc(secrets?.manytalksTokenEnc);
+  if (!token) {
+    return { status: "skipped", reason: "token ManyTalks ausente" };
+  }
+
+  const url = `${appUrl()}/api/hooks/manytalks`;
+  const client = createManytalksClient({
+    base: bot.manytalksBase,
+    accountId: bot.manytalksAccountId,
+    token,
+  });
+
+  try {
+    const existing = unwrapWebhooks(await client.listWebhooks());
+    const match = findWebhookByUrl(existing, url);
+    if (!match) return { status: "not_found" };
+
+    const webhookId = webhookIdOf(match);
+    if (webhookId == null) {
+      return { status: "failed", error: "webhook encontrado sem id válido" };
+    }
+
+    await client.deleteWebhook(webhookId);
+    return { status: "deleted", webhookId };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "Falha ao remover webhook ManyTalks.";
+    return { status: "failed", error };
+  }
+}
